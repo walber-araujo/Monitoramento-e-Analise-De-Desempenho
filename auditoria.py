@@ -37,7 +37,7 @@ def get_logs_for_pid(pid, start_time, end_time):
         return None
 
 # Função para analisar o relatório de anomalias e gerar auditoria
-def analyze_anomalies_report(report_file, output_dir):
+def analyze_anomalies_report(report_file, output_dir, anomaly_threshold=2.0, std_dev=3):
     try:
         # Cria o diretório de saída, se não existir
         os.makedirs(output_dir, exist_ok=True)
@@ -86,10 +86,13 @@ def main():
     parser = argparse.ArgumentParser(description="Análise de desempenho da aplicação")
     parser.add_argument("-i", "--input", type=str, required=True, help="Arquivo CSV de entrada")
     parser.add_argument("-o", "--output", type=str, default="auditoria", help="Diretório de saída para a auditoria")
+    parser.add_argument("-t", "--anomaly_threshold", type=float, default=2.0, help="Limiar de CPU para análise")
+    parser.add_argument("-std", "--std_dev", type=int, default=3, help="Número de desvios padrão para detecção de anomalias")
+    
     args = parser.parse_args()
 
     # Executa a análise
-    analyze_anomalies_report(args.input, args.output)
+    analyze_anomalies_report(args.input, args.output, args.anomaly_threshold, args.std_dev)
 
 # Executa o script
 if __name__ == "__main__":
