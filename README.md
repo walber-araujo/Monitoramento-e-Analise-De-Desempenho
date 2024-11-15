@@ -1,92 +1,144 @@
 # Projeto de Monitoramento e Análise de Desempenho
 
-Este projeto tem como objetivo monitorar processos ou PIDs no sistema, auditar e analisar o uso de CPU e memória, detectando anomalias e gerando gráficos interativos para visualização.
+Este projeto oferece uma solução para monitoramento de processos, análise de desempenho e auditoria de anomalias em aplicações.
+Ele coleta dados de uso de CPU, memória, E/S e conexões de rede, gera gráficos interativos, detecta anomalias e fornece relatórios detalhados para análise.
 
 ## Estrutura do Projeto
 
-O projeto possui três componentes principais:
+O projeto é composto por três scripts principais:
+ 
+1. **monitor.py**: Coleta dados de desempenho de processos ou PIDs especificados.
+2. **analise.py**: Realiza a análise dos dados coletados, gerando gráficos interativos e detectando anomalias.
+3. **auditoria.py**: Realiza a auditoria das anomalias detectadas, coletando logs do sistema e gerando um relatório em formato JSON.
 
-1. **monitor.py**: Script responsável por monitorar o uso de CPU e memória de processos ou PIDs específicos, gerando um arquivo CSV de saída.
-2. **auditoria.py**: Script que realiza a auditoria de anomalias com base no arquivo CSV gerado pelo `monitor.py`.
-3. **analise.py**: Script que realiza a análise de desempenho, gerando gráficos interativos a partir dos dados de entrada.
-
-Além disso, o projeto inclui um **Makefile** para facilitar a execução dos scripts e automação de tarefas.
+Além disso, o `Makefile` fornece uma maneira simples de executar as tarefas de monitoramento, auditoria e análise.
 
 ## Requisitos
 
-Certifique-se de que você tenha o Python 3 instalado, assim como as dependências necessárias. Você pode instalar as dependências executando:
+- Python 3.x
+- Bibliotecas Python:
+   - `psutil`
+   - `pandas`
+   - `plotly`
+- Sistema operacional macOS (para coleta de logs com `log show`)
+- Dependências podem ser instaladas usando um ambiente virtual Python, como `venv`.
+
+## Instalação
+
+Clone o repositório:
+
+```bash
+git clone https://github.com/seu-usuario/seu-repositorio.git
+cd seu-repositorio
+```
+
+Crie e ative um ambiente virtual:
+
+```bash
+python3 -m venv MyVenv
+source MyVenv/bin/activate   # No macOS/Linux
+```
+
+Instale as dependências:
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### Dependências
+# Uso
 
-- **pandas**: Para manipulação de dados.
-- **plotly**: Para gerar gráficos interativos.
-- **argparse**: Para processar argumentos de linha de comando.
+## Monitoramento
 
-## Como Usar
+O script **monitor.py** coleta dados de desempenho de um processo específico ou PID. É possível monitorar um processo por nome ou um PID diretamente.
+Os dados são salvos em um arquivo CSV.
 
-### Passo 1: Monitorar um Processo
+Exemplo de uso:
 
-O Makefile permite monitorar um processo específico ou um PID. Para isso, você pode usar o alvo `monitor` no Makefile.
-
-```bash
-make monitor PROCESS_NAME="nome_do_processo" INTERVAL=1.0 OUTPUT_CSV="output.csv"
-```
-
-- **PROCESS_NAME**: Nome do processo que você deseja monitorar (exemplo: `python`).
-- **PID**: Alternativamente, você pode fornecer o PID do processo em vez do nome do processo.
-- **INTERVAL**: Intervalo de tempo em segundos para coleta de dados.
-- **OUTPUT_CSV**: Arquivo CSV onde os dados serão armazenados.
-
-Se você preferir monitorar por PID, passe o `PID` diretamente:
+Para monitorar um processo pelo nome, execute:
 
 ```bash
-make monitor PID=12345 INTERVAL=1.0 OUTPUT_CSV="output.csv"
+make monitor PROCESS_NAME="nome_do_processo" INTERVAL=2.0 OUTPUT_CSV="output.csv"
 ```
 
-### Passo 2: Auditoria de Anomalias
-
-Após coletar os dados de monitoramento, você pode realizar uma auditoria para detectar anomalias de uso de CPU e memória. Para isso, execute o alvo `audit` no Makefile.
+Ou, caso queira monitorar um processo pelo PID, execute:
 
 ```bash
-make audit INPUT_CSV="output.csv" ANOMALY_THRESHOLD=2.0 STD_DEV=3
+make monitor PID=1234 INTERVAL=2.0 OUTPUT_CSV="output.csv"
 ```
 
-- **INPUT_CSV**: Arquivo CSV com os dados coletados (gerado pelo `monitor`).
-- **ANOMALY_THRESHOLD**: Limiar de CPU para detecção de anomalias.
-- **STD_DEV**: Número de desvios padrão para detectar anomalias.
+**Parâmetros**:
 
-### Passo 3: Análise de Desempenho e Geração de Gráficos
+- `PROCESS_NAME`: Nome do processo que será monitorado. Exemplo: "nome_do_processo".
+- `PID`: ID do processo a ser monitorado. Pode ser usado em vez de `PROCESS_NAME`.
+- `INTERVAL`: Intervalo de tempo (em segundos) entre as coletas de dados.
+- `OUTPUT_CSV`: Nome do arquivo CSV onde os dados de desempenho serão salvos.
 
-Com os dados de auditoria, você pode gerar gráficos interativos para visualizar o desempenho. Para isso, use o alvo `analysis` no Makefile:
+## Análise
+
+O script **analise.py** recebe os dados de desempenho coletados e gera gráficos interativos, além de detectar anomalias com base no número de desvios padrão especificado.
+
+Exemplo de uso:
 
 ```bash
-make analysis OUTPUT_CSV="output.csv" GRAPH_DIR="graphs"
+make analysis INPUT_CSV="output.csv" GRAPH_DIR="graphs"
 ```
 
-- **OUTPUT_CSV**: Arquivo CSV com os dados coletados.
-- **GRAPH_DIR**: Diretório onde os gráficos serão salvos.
+**Parâmetros**:
 
-### Passo 4: Executar Todo o Processo
+- `INPUT_CSV`: O arquivo CSV com os dados de desempenho a ser analisado.
+- `GRAPH_DIR`: Diretório onde os gráficos gerados serão salvos.
 
-Se desejar executar todo o processo (monitoramento, auditoria e análise) em sequência, basta executar o alvo `all` no Makefile:
+## Auditoria
+
+O script **auditoria.py** realiza a auditoria das anomalias detectadas, coletando logs do sistema para os PIDs com anomalias e gerando um relatório detalhado em formato JSON.
+
+Exemplo de uso:
 
 ```bash
-make all PROCESS_NAME="nome_do_processo" INTERVAL=1.0 OUTPUT_CSV="output.csv" INPUT_CSV="output.csv" ANOMALY_THRESHOLD=2.0 STD_DEV=3 GRAPH_DIR="graphs"
+make audit INPUT_CSV="anomalies.csv" OUTPUT_DIR="auditoria"
 ```
 
-## Makefile
+**Parâmetros**:
 
-O **Makefile** facilita a execução das diferentes etapas do projeto, permitindo a configuração de variáveis e execução de alvos específicos. As variáveis definidas no Makefile são:
+- `INPUT_CSV`: O arquivo CSV com as anomalias detectadas.
+- `OUTPUT_DIR`: Diretório onde os relatórios de auditoria em formato JSON serão salvos.
 
-- **PROCESS_NAME**: Nome do processo a ser monitorado (padrão é "default_process").
-- **PID**: PID do processo a ser monitorado (padrão é vazio).
-- **INPUT_CSV**: Arquivo CSV de entrada para auditoria (padrão é "anomalies.csv").
-- **OUTPUT_CSV**: Arquivo CSV de saída para monitoramento (padrão é "monitor_output.csv").
-- **GRAPH_DIR**: Diretório onde os gráficos serão salvos (padrão é "graphs").
+Executar Todo o Processo
 
-# Monitoramento-e-Analise-De-Desempenho
-# Monitoramento-e-Analise-De-Desempenho
+Para executar o monitoramento, auditoria e análise de forma sequencial, use o alvo `all` no Makefile:
+
+```bash
+make all PROCESS_NAME="nome_do_processo" INTERVAL=2.0 OUTPUT_CSV="output.csv"
+```
+
+Este comando irá:
+
+1. Monitorar o processo especificado e salvar os dados em `output.csv`.
+2. Realizar a auditoria de anomalias e gerar um relatório em formato JSON.
+3. Gerar gráficos de análise de desempenho.
+
+**Parâmetros**:
+
+- `PROCESS_NAME`: Nome do processo a ser monitorado.
+- `PID`: ID do processo (opcional, caso não use `PROCESS_NAME`).
+- `INTERVAL`: Intervalo de tempo (em segundos) entre as coletas de dados.
+- `OUTPUT_CSV`: Nome do arquivo CSV onde os dados de desempenho serão salvos.
+
+Arquivos Gerados
+
+Os seguintes arquivos podem ser gerados pelo projeto:
+
+- **output.csv**: Arquivo CSV contendo os dados de desempenho coletados (timestamp, nome do processo, PID, uso de CPU, uso de memória, leituras de I/O, conexões de rede).
+- **anomalies.csv**: Arquivo CSV contendo as anomalias detectadas durante a análise de desempenho.
+- **graphs/**: Diretório contendo os gráficos gerados pelo script de análise, salvos no formato HTML.
+- **auditoria/**: Diretório contendo os relatórios de auditoria em formato JSON.
+
+Exemplo de Arquivo CSV de Saída
+
+O arquivo `output.csv` gerado pelo script de monitoramento terá o seguinte formato:
+
+```csv
+timestamp;process_name;pid;cpu_usage_percent;memory_usage_percent;memory_usage_mb;io_reads;io_writes;network_connections
+2024-11-15 19:48:47;nome_do_processo;1234;15.2;30.3;2048;500;300;3
+2024-11-15 19:48:49;nome_do_processo;1234;14.7;31.0;2050;510;310;3
+```
