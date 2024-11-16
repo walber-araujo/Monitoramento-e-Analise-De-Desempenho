@@ -1,26 +1,10 @@
-import time
-import csv
-import argparse
 import psutil
-import sys
+import argparse
+import csv
+import time
+from datetime import datetime
 
-# Define os argumentos do script
-parser = argparse.ArgumentParser(description="Monitoramento de processos no macOS")
-group = parser.add_mutually_exclusive_group(required=True)
-group.add_argument("-p", "--pid", type=int, help="PID do processo alvo")
-group.add_argument("-n", "--name", type=str, help="Nome do processo alvo")
-parser.add_argument("-o", "--output", type=str, default="monitor_output.csv", help="Arquivo de saída CSV")
-parser.add_argument("-i", "--interval", type=float, default=1.0, help="Intervalo de coleta de métricas em segundos")
-args = parser.parse_args()
-
-# Função para obter o PID pelo nome do processo
-def get_pid_by_name(name):
-    for process in psutil.process_iter(attrs=['pid', 'name']):
-        if process.info['name'] == name:
-            return process.info['pid']
-    return None
-
-# Função para verificar se o PID está ativo e obter o nome do processo
+# Função para obter o nome do processo a partir do PID
 def get_process_name(pid):
     try:
         process = psutil.Process(pid)
@@ -28,136 +12,86 @@ def get_process_name(pid):
     except psutil.NoSuchProcess:
         return None
 
-# Função para verificar se o PID ainda está ativo
-def is_pid_running(pid):
-    return psutil.pid_exists(pid)
-
-# Função para coletar o uso de CPU específico do processo
-def get_process_cpu_usage(process):
+# Função principal para monitorar o processo
+def monitor_process(process_name, pid, interval, output_file):
     try:
-        return process.cpu_percent(interval=None)  # Usa o intervalo já calculado pelo método
-    except psutil.NoSuchProcess:
-        return 0
-
-# Função para obter uso de memória do processo em porcentagem e em MB
-def get_process_memory_usage(process):
-    try:
-        memory_percent = process.memory_percent()  # Porcentagem de memória usada pelo processo
-        memory_info = process.memory_info().rss / (1024 * 1024)  # Memória usada em MB
-        return memory_percent, memory_info
-    except psutil.NoSuchProcess:
-        return 0, 0
-
-# Função para coletar métricas de I/O do processo
-def get_io_metrics(process):
-    try:
-        if hasattr(process, 'io_counters'):
-            io_counters = process.io_counters()
-            return io_counters.read_count, io_counters.write_count
-        else:
-            return 0, 0
-    except psutil.NoSuchProcess:
-        return 0, 0
-
-# Função para coletar métricas de rede
-def get_network_metrics(process):
-    try:
-        connections = process.connections(kind='inet')
-        return len(connections)
-    except psutil.NoSuchProcess:
-        return 0
-
-# Função para encontrar o processo baseado no nome ou PID
-def find_process(name=None, pid=None):
-    try:
+        # Se o PID for fornecido, buscar o nome do processo correspondente
         if pid:
-            process = psutil.Process(pid)
-        elif name:
-            pid = get_pid_by_name(name)
-            if pid:
-                process = psutil.Process(pid)
-            else:
-                return None
-        else:
-            return None
-        return process
-    except psutil.NoSuchProcess:
-        return None
+            process_name = get_process_name(pid)
+            if process_name is None:
+                raise ValueError(f"Process with PID {pid} not found.")
 
-# Determina o PID do processo
-if args.name:
-    process = find_process(name=args.name)
-    if not process:
-        print(f"Erro: O processo com nome '{args.name}' não está ativo.")
-        sys.exit(1)
-elif args.pid:
-    process = find_process(pid=args.pid)
-    if not process:
-        print(f"Erro: O processo com PID {args.pid} não está ativo.")
-        sys.exit(1)
+        # Abre o arquivo CSV para escrita
+        with open(output_file, mode='w', newline='') as file:
+            fieldnames = [
+                "timestamp", "process_name", "pid", 
+                "cpu_usage_percent", "memory_usage_percent", 
+                "memory_usage_mb", "io_reads", "io_writes", 
+                "network_connections"
+            ]
+            writer = csv.DictWriter(file, fieldnames=fieldnames, delimiter=';')
+            writer.writeheader()
 
-# Verifica se o processo está ativo
-pid = process.pid
-process_name = get_process_name(pid)
-if not process_name:
-    print(f"Erro: O processo com PID {pid} não está ativo.")
-    sys.exit(1)
+            # Loop de monitoramento
+            while True:
+                timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                for process in psutil.process_iter(['pid', 'name', 'cpu_percent', 'memory_percent', 'memory_info']):
+                    if process_name == process.info['name'] or (pid and pid == process.info['pid']):
+                        pid = process.info['pid']
+                        cpu_usage = process.info['cpu_percent']
+                        memory_usage_percent = process.info['memory_percent']
+                        memory_usage_mb = process.info['memory_info'].rss / (1024 * 1024)
+                        
+                        # Obtendo IO e conexões
+                        try:
+                            io_counters = process.io_counters()
+                            io_reads = io_counters.read_count
+                            io_writes = io_counters.write_count
+                        except (psutil.AccessDenied, AttributeError):
+                            io_reads = io_writes = 0
 
-# Abre o arquivo CSV para escrita com tratamento de exceção
-try:
-    with open(args.output, mode="w", newline="") as csvfile:
-        fieldnames = [
-            "timestamp", "process_name", "pid", "cpu_usage_percent", "memory_usage_percent",
-            "memory_usage_mb", "io_reads", "io_writes", "network_connections"
-        ]
-        writer = csv.DictWriter(csvfile, fieldnames=fieldnames, delimiter=";")
-        writer.writeheader()
+                        try:
+                            connections = len(process.connections(kind='inet'))
+                        except (psutil.AccessDenied, psutil.NoSuchProcess):
+                            connections = 0
 
-        print(f"Monitorando o processo '{process_name}' com PID {pid}... Pressione Ctrl+C para interromper.")
-        print(f"Os dados estão sendo salvos em '{args.output}'.")
+                        # Escreve os dados no CSV
+                        writer.writerow({
+                            "timestamp": timestamp,
+                            "process_name": process_name,
+                            "pid": pid,
+                            "cpu_usage_percent": cpu_usage,
+                            "memory_usage_percent": memory_usage_percent,
+                            "memory_usage_mb": memory_usage_mb,
+                            "io_reads": io_reads,
+                            "io_writes": io_writes,
+                            "network_connections": connections
+                        })
+                        file.flush()  # Garante que os dados sejam salvos
+                        break
+                time.sleep(interval)
+    except KeyboardInterrupt:
+        print("Monitoramento interrompido pelo usuário.")
+    except Exception as e:
+        print(f"Erro ao monitorar o processo: {e}")
 
-        # Inicializa o cálculo de CPU
-        process.cpu_percent(interval=None)  # Inicializa o cálculo
 
-        # Verificação do intervalo
-        if args.interval < 0.1:
-            print("Aviso: Intervalo muito curto pode impactar o desempenho e a precisão.")
+def main():
+    parser = argparse.ArgumentParser(description="Monitora o uso de recursos de um processo.")
+    parser.add_argument("-n", "--name", type=str, help="Nome do processo para monitorar.")
+    parser.add_argument("-p", "--pid", type=int, help="PID do processo para monitorar.")
+    parser.add_argument("-i", "--interval", type=float, default=1.0, help="Intervalo entre leituras (em segundos).")
+    parser.add_argument("-o", "--output", type=str, required=True, help="Arquivo de saída CSV.")
+    args = parser.parse_args()
 
-        try:
-            while is_pid_running(pid):
-                # Marca o início do ciclo
-                start_time = time.time()
-                
-                timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
-                cpu_usage = get_process_cpu_usage(process)
-                memory_usage_percent, memory_usage_mb = get_process_memory_usage(process)
-                io_reads, io_writes = get_io_metrics(process)
-                network_connections = get_network_metrics(process)
+    if not args.name and not args.pid:
+        print("Erro: É necessário fornecer o nome do processo ou o PID.")
+        return
 
-                # Coleta de dados
-                row = {
-                    "timestamp": timestamp,
-                    "process_name": process_name,
-                    "pid": pid,  # Adiciona o PID ao registro
-                    "cpu_usage_percent": cpu_usage,
-                    "memory_usage_percent": memory_usage_percent,
-                    "memory_usage_mb": memory_usage_mb,
-                    "io_reads": io_reads,
-                    "io_writes": io_writes,
-                    "network_connections": network_connections
-                }
+    # Monitorar com base no nome ou PID
+    monitor_process(args.name, args.pid, args.interval, args.output)
 
-                writer.writerow(row)
-                csvfile.flush()
 
-                # Calcula o tempo gasto e ajusta para compensar
-                elapsed_time = time.time() - start_time
-                if elapsed_time < args.interval:
-                    time.sleep(args.interval - elapsed_time)
-
-        except KeyboardInterrupt:
-            print("\nMonitoramento finalizado.")
-except IOError as e:
-    print(f"Erro ao abrir o arquivo CSV: {e}")
-    sys.exit(1)
+if __name__ == "__main__":
+    main()
 

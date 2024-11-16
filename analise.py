@@ -16,8 +16,15 @@ args = parser.parse_args()
 os.makedirs(args.output, exist_ok=True)
 
 # Carrega os dados do CSV
-df = pd.read_csv(args.input, delimiter=";")
-df['timestamp'] = pd.to_datetime(df['timestamp'], format='%Y-%m-%d %H:%M:%S')
+try:
+    df = pd.read_csv(args.input, delimiter=";")
+    df['timestamp'] = pd.to_datetime(df['timestamp'], format='%Y-%m-%d %H:%M:%S')
+except FileNotFoundError:
+    print(f"Erro: O arquivo {args.input} não foi encontrado.")
+    exit(1)
+except pd.errors.ParserError:
+    print(f"Erro: Não foi possível analisar o arquivo {args.input}. Verifique o formato CSV.")
+    exit(1)
 
 # Verifica se as colunas necessárias existem
 required_columns = ['cpu_usage_percent', 'memory_usage_percent', 'memory_usage_mb', 'io_reads', 'network_connections', 'pid']
@@ -33,7 +40,7 @@ def save_interactive_graphs(df):
         # Criação do gráfico interativo
         fig = px.line(df, x='timestamp', y=column, title=title,
                       labels={'timestamp': 'Horário', column: ylabel},
-                      line_shape='linear')
+                      line_shape='linear', line_dash_sequence=['solid'])
         
         # Adiciona a linha de média
         mean_value = df[column].mean()

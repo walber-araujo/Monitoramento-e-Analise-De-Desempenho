@@ -1,0 +1,13 @@
+# Ignorar diretórios e arquivos gerados
+*.csv
+*.json
+*.log
+auditoria/
+graphs/
+
+# Ignorar arquivos temporários
+*.bak
+*.swp
+*.tmp
+*.DS_Store
+
