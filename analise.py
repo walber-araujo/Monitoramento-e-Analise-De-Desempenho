@@ -2,7 +2,6 @@ import pandas as pd
 import argparse
 import os
 import plotly.express as px
-from datetime import timedelta
 
 # Argumentos para o arquivo CSV de entrada, o diretório de saída para gráficos, o limite de CPU e o número de desvios padrão
 parser = argparse.ArgumentParser(description="Análise de desempenho da aplicação")
@@ -33,90 +32,77 @@ for column in required_columns:
         print(f"A coluna '{column}' não está presente no arquivo CSV. Ajuste necessário.")
         exit(1)
 
-# Função para gerar e salvar gráficos interativos
-def save_interactive_graphs(df):
-    # Função auxiliar para configurar e salvar cada gráfico
-    def save_plot(column, title, ylabel, color, filename):
-        # Criação do gráfico interativo
-        fig = px.line(df, x='timestamp', y=column, title=title,
-                      labels={'timestamp': 'Horário', column: ylabel},
-                      line_shape='linear', line_dash_sequence=['solid'])
-        
-        # Adiciona a linha de média
-        mean_value = df[column].mean()
-        fig.add_hline(y=mean_value, line_dash="dash", line_color='gray', annotation_text=f"Média: {mean_value:.2f}")
-        
-        # Anomalias (valores acima e abaixo de N desvios padrão)
-        std_dev = df[column].std()
+# Adiciona uma coluna para a hora
+df['hour'] = df['timestamp'].dt.hour
+
+# Filtra horários fora do intervalo 00:00-08:00
+df_filtered = df[df['hour'] >= 8]
+
+# Função para calcular métricas e imprimir relatório
+def print_detailed_report(df, filtered=False):
+    report_title = "Relatório Detalhado (08:00-23:59)" if filtered else "Relatório Detalhado (Completo)"
+    print("\n" + "=" * len(report_title))
+    print(report_title)
+    print("=" * len(report_title))
+
+    current_df = df_filtered if filtered else df
+
+    for column in ['cpu_usage_percent', 'memory_usage_percent', 'memory_usage_mb', 'io_reads', 'network_connections']:
+        mean_value = current_df[column].mean()
+        std_dev = current_df[column].std()
+        data_count = len(current_df[column])
         anomaly_threshold_upper = mean_value + args.std_dev * std_dev
         anomaly_threshold_lower = mean_value - args.std_dev * std_dev
 
-        # Se for CPU, não considerar anomalias abaixo do limite de CPU
-        if column == 'cpu_usage_percent' and args.cpu_limit > 0:
-            anomalies = df[(df[column] > anomaly_threshold_upper) & (df[column] >= args.cpu_limit)]
-        else:
-            anomalies = df[df[column] > anomaly_threshold_upper]
+        # Conta anomalias acima e abaixo do limite
+        anomalies_upper = current_df[current_df[column] > anomaly_threshold_upper]
+        anomalies_lower = current_df[current_df[column] < anomaly_threshold_lower]
+        total_anomalies = len(anomalies_upper) + len(anomalies_lower)
 
-        # Adiciona as anomalias acima de N desvios
-        fig.add_scatter(x=anomalies['timestamp'], y=anomalies[column], mode='markers', 
-                        marker=dict(color='red', size=10), name=f"Anomalias (acima {args.std_dev} desvios)")
+        print(f"\nMétrica: {column}")
+        print(f"- Número de dados: {data_count}")
+        print(f"- Média: {mean_value:.2f}")
+        print(f"- Desvio padrão: {std_dev:.2f}")
+        print(f"- Limite superior (anomalias): {anomaly_threshold_upper:.2f}")
+        print(f"- Limite inferior (anomalias): {anomaly_threshold_lower:.2f}")
+        print(f"- Total de anomalias: {total_anomalies}")
+        print(f"  -> Acima do limite: {len(anomalies_upper)}")
+        print(f"  -> Abaixo do limite: {len(anomalies_lower)}")
 
-        # Adiciona as anomalias abaixo de N desvios
-        anomalies_lower = df[df[column] < anomaly_threshold_lower]
-        fig.add_scatter(x=anomalies_lower['timestamp'], y=anomalies_lower[column], mode='markers', 
-                        marker=dict(color='orange', size=10), name=f"Anomalias (abaixo {args.std_dev} desvios)")
-        
-        # Salvando o gráfico interativo como HTML
-        fig.write_html(f"{args.output}/{filename}.html")  # Salva como HTML para interatividade
+# Função para salvar gráficos com médias corretas
+def save_graphs(df, filtered=False):
+    # Define o prefixo para distinguir os gráficos filtrados
+    prefix = "filtered_" if filtered else ""
+
+    # Escolhe o DataFrame apropriado
+    current_df = df_filtered if filtered else df
+
+    def save_plot(column, title, ylabel, filename):
+        fig = px.line(current_df, x='timestamp', y=column, title=title,
+                      labels={'timestamp': 'Horário', column: ylabel},
+                      line_shape='linear')
+
+        # Média correta para o DataFrame atual
+        mean_value = current_df[column].mean()
+        fig.add_hline(y=mean_value, line_dash="dash", line_color='gray',
+                      annotation_text=f"Média: {mean_value:.2f}")
+
+        # Salvando o gráfico
+        fig.write_html(f"{args.output}/{prefix}{filename}.html")
         fig.show()
 
     # Gráficos
-    save_plot('cpu_usage_percent', "Uso de CPU (%)", "Uso de CPU (%)", 'dodgerblue', 'cpu_usage')
-    save_plot('memory_usage_percent', "Uso de Memória (%)", "Uso de Memória (%)", 'forestgreen', 'memory_usage_percent')
-    save_plot('memory_usage_mb', "Uso de Memória (MB)", "Memória Usada (MB)", 'goldenrod', 'memory_usage_mb')
-    save_plot('io_reads', "Leituras de I/O", "Número de Leituras", 'firebrick', 'io_reads')
-    save_plot('network_connections', "Conexões de Rede", "Número de Conexões", 'purple', 'network_connections')
+    save_plot('cpu_usage_percent', f"Uso de CPU (%) {'(08:00-23:59)' if filtered else ''}", "Uso de CPU (%)", f"{prefix}cpu_usage")
+    save_plot('memory_usage_percent', f"Uso de Memória (%) {'(08:00-23:59)' if filtered else ''}", "Uso de Memória (%)", f"{prefix}memory_usage_percent")
+    save_plot('memory_usage_mb', f"Uso de Memória (MB) {'(08:00-23:59)' if filtered else ''}", "Memória Usada (MB)", f"{prefix}memory_usage_mb")
+   # save_plot('io_reads', "Leituras de I/O", "Número de Leituras", f"{prefix}io_reads")
+    #save_plot('network_connections', "Conexões de Rede", "Número de Conexões", f"{prefix}network_connections")
 
-    print("Gráficos interativos salvos no diretório especificado.")
+    print(f"Gráficos {'filtrados ' if filtered else ''}salvos no diretório especificado.")
 
-# Função para detectar anomalias e salvar em arquivo CSV
-def detect_anomalies_and_save(df, cpu_limit, std_dev_value):
-    anomaly_data = []
-
-    # Detecta anomalias nos dados
-    for column in ['cpu_usage_percent', 'memory_usage_percent', 'memory_usage_mb']:
-        # Caso o limite de CPU seja maior que o valor mínimo e for CPU, aplicar a verificação
-        if column == 'cpu_usage_percent' and cpu_limit > 0:
-            df = df[df[column] >= cpu_limit]  # Filtra os dados que têm uso de CPU acima do limite mínimo
-
-        std_dev = df[column].std()
-        mean_value = df[column].mean()
-        anomaly_threshold_upper = mean_value + std_dev_value * std_dev
-        anomaly_threshold_lower = mean_value - std_dev_value * std_dev
-
-        # Filtra as anomalias, mas exclui as de CPU abaixo do limite
-        anomalies = df[(df[column] > anomaly_threshold_upper) | (df[column] < anomaly_threshold_lower)]
-        
-        # Exclui as anomalias de CPU que estão abaixo do limite configurado
-        if column == 'cpu_usage_percent' and cpu_limit > 0:
-            anomalies = anomalies[anomalies[column] >= cpu_limit]
-
-        # Adiciona as anomalias aos dados
-        for _, anomaly in anomalies.iterrows():
-            anomaly_data.append({
-                'timestamp': anomaly['timestamp'],
-                'column': column,
-                'value': anomaly[column],
-                'pid': anomaly['pid'],  # Inclui o pid
-                'anomaly_type': 'above' if anomaly[column] > anomaly_threshold_upper else 'below'
-            })
-
-    # Salva as anomalias em um arquivo CSV
-    anomaly_df = pd.DataFrame(anomaly_data)
-    anomaly_df.to_csv('anomalies.csv', index=False)
-    print(f"Anomalias detectadas e salvas no arquivo 'anomalies.csv'.")
-
-# Executa a análise e salva os gráficos e anomalias
-save_interactive_graphs(df)
-detect_anomalies_and_save(df, cpu_limit=args.cpu_limit, std_dev_value=args.std_dev)
+# Executa as funções de relatório e gráficos
+print_detailed_report(df, filtered=False)  # Relatório completo
+print_detailed_report(df, filtered=True)   # Relatório filtrado
+save_graphs(df, filtered=False)            # Gráficos gerais
+save_graphs(df, filtered=True)             # Gráficos filtrados
 
