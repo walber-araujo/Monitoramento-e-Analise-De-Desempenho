@@ -1,4 +1,4 @@
 pandas
 plotly
 argparse
-
+psutil
