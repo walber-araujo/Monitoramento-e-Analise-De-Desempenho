@@ -57,13 +57,13 @@ Exemplo de uso:
 Para monitorar um processo pelo nome, execute:
 
 ```bash
-make monitor PROCESS_NAME="nome_do_processo" INTERVAL=2.0 OUTPUT_CSV="output.csv"
+make monitor PROCESS_NAME="nome_do_processo" INTERVAL=1.0 OUTPUT_CSV="output.csv"
 ```
 
 Ou, caso queira monitorar um processo pelo PID, execute:
 
 ```bash
-make monitor PID=1234 INTERVAL=2.0 OUTPUT_CSV="output.csv"
+make monitor PID=1234 INTERVAL=1.0 OUTPUT_CSV="output.csv"
 ```
 
 **Parâmetros**:
@@ -95,34 +95,13 @@ O script **auditoria.py** realiza a auditoria das anomalias detectadas, coletand
 Exemplo de uso:
 
 ```bash
-make audit INPUT_CSV="anomalies.csv" OUTPUT_DIR="auditoria"
+make audit
 ```
 
 **Parâmetros**:
 
 - `INPUT_CSV`: O arquivo CSV com as anomalias detectadas.
 - `OUTPUT_DIR`: Diretório onde os relatórios de auditoria em formato JSON serão salvos.
-
-Executar Todo o Processo
-
-Para executar o monitoramento, auditoria e análise de forma sequencial, use o alvo `all` no Makefile:
-
-```bash
-make all PROCESS_NAME="nome_do_processo" INTERVAL=2.0 OUTPUT_CSV="output.csv"
-```
-
-Este comando irá:
-
-1. Monitorar o processo especificado e salvar os dados em `output.csv`.
-2. Realizar a auditoria de anomalias e gerar um relatório em formato JSON.
-3. Gerar gráficos de análise de desempenho.
-
-**Parâmetros**:
-
-- `PROCESS_NAME`: Nome do processo a ser monitorado.
-- `PID`: ID do processo (opcional, caso não use `PROCESS_NAME`).
-- `INTERVAL`: Intervalo de tempo (em segundos) entre as coletas de dados.
-- `OUTPUT_CSV`: Nome do arquivo CSV onde os dados de desempenho serão salvos.
 
 Arquivos Gerados
 

@@ -42,7 +42,7 @@ monitor:
 # Alvo para realizar a auditoria de anomalias
 audit:
 	@echo "Iniciando auditoria de anomalias com o arquivo $(INPUT_CSV)..."
-	$(PYTHON3) auditoria.py -i "$(INPUT_CSV)" -o "$(OUTPUT_DIR)" -t "$(ANOMALY_THRESHOLD)" -std $(STD_DEV)
+	$(PYTHON3) auditoria.py 
 
 # Alvo para realizar a análise de desempenho e gerar gráficos
 analysis:
@@ -52,4 +52,3 @@ analysis:
 # Alvo para realizar toda a sequência de monitoramento, auditoria e análise
 all: monitor audit analysis
 	@echo "Processo completo de monitoramento, auditoria e análise finalizado!"
-

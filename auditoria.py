@@ -14,7 +14,7 @@ def get_logs_for_pid(pid, start_time, end_time):
 
         # Comando para buscar logs no macOS
         log_command = [
-            "log", "show", 
+            "log", "show",
             "--predicate", f"processID == {pid}",
             "--info",
             "--start", start_time_str,
@@ -37,7 +37,7 @@ def get_logs_for_pid(pid, start_time, end_time):
         return None
 
 # Função para analisar o relatório de anomalias e gerar auditoria
-def analyze_anomalies_report(report_file, output_dir, anomaly_threshold=2.0, std_dev=3):
+def analyze_anomalies_report(report_file, output_dir):
     try:
         # Cria o diretório de saída, se não existir
         os.makedirs(output_dir, exist_ok=True)
@@ -45,35 +45,39 @@ def analyze_anomalies_report(report_file, output_dir, anomaly_threshold=2.0, std
         audit_data = {"anomalies": []}
 
         with open(report_file, mode='r') as file:
-            reader = csv.DictReader(file)
+            reader = csv.DictReader(file, delimiter=";")
             
             for row in reader:
-                timestamp_str = row['timestamp']
-                pid = int(row['pid'])
-                anomaly_type = row['anomaly_type']
-                
-                # Converte o timestamp para datetime
-                timestamp = datetime.strptime(timestamp_str, "%Y-%m-%d %H:%M:%S")
-                end_time = timestamp + timedelta(seconds=10)
+                # Valida se a linha representa uma anomalia de CPU
+                if row.get('cpu_anomaly') == 'True':
+                    timestamp_str = row['timestamp']
+                    pid = int(row['pid'])
+                    process_name = row['process_name']
 
-                # Obtém os logs para o PID
-                logs = get_logs_for_pid(pid, timestamp, end_time)
-                
-                anomaly_entry = {
-                    "timestamp": timestamp_str,
-                    "pid": pid,
-                    "anomaly_type": anomaly_type,
-                    "log_interval": {
-                        "start": timestamp.strftime('%Y-%m-%d %H:%M:%S'),
-                        "end": end_time.strftime('%Y-%m-%d %H:%M:%S')
-                    },
-                    "logs": logs if logs else "Nenhum log encontrado no intervalo"
-                }
-                audit_data["anomalies"].append(anomaly_entry)
+                    # Converte o timestamp para datetime
+                    timestamp = datetime.strptime(timestamp_str, "%Y-%m-%d %H:%M:%S")
+                    start_time = timestamp - timedelta(seconds=10)
+                    end_time = timestamp + timedelta(seconds=10)
+
+                    # Obtém os logs para o PID
+                    logs = get_logs_for_pid(pid, start_time, end_time)
+                    
+                    anomaly_entry = {
+                        "timestamp": timestamp_str,
+                        "pid": pid,
+                        "process_name": process_name,
+                        "anomaly_type": "CPU",  
+                        "log_interval": {
+                            "start": start_time.strftime('%Y-%m-%d %H:%M:%S'),
+                            "end": end_time.strftime('%Y-%m-%d %H:%M:%S')
+                        },
+                        "logs": logs if logs else "Nenhum log encontrado no intervalo"
+                    }
+                    audit_data["anomalies"].append(anomaly_entry)
         
         # Salva o JSON no arquivo
         audit_filename = os.path.join(output_dir, "audit_logs.json")
-        with open(audit_filename, 'w') as json_file:
+        with open(audit_filename, 'w', encoding='utf-8') as json_file:
             json.dump(audit_data, json_file, indent=4, ensure_ascii=False)
         
         print(f"Relatório de auditoria salvo em: {audit_filename}")
@@ -84,17 +88,14 @@ def analyze_anomalies_report(report_file, output_dir, anomaly_threshold=2.0, std
 # Função principal para os argumentos
 def main():
     parser = argparse.ArgumentParser(description="Análise de desempenho da aplicação")
-    parser.add_argument("-i", "--input", type=str, required=True, help="Arquivo CSV de entrada")
-    parser.add_argument("-o", "--output", type=str, default="auditoria", help="Diretório de saída para a auditoria")
-    parser.add_argument("-t", "--anomaly_threshold", type=float, default=2.0, help="Limiar de CPU para análise")
-    parser.add_argument("-std", "--std_dev", type=int, default=3, help="Número de desvios padrão para detecção de anomalias")
+    parser.add_argument("-i", "--input", type=str, default="graphs/cpu_anomalies.csv", help="Arquivo CSV de entrada com as anomalias")
+    parser.add_argument("-o", "--output", type=str, default="auditoria", help="Diretório de saída para os logs de auditoria")
     
     args = parser.parse_args()
 
     # Executa a análise
-    analyze_anomalies_report(args.input, args.output, args.anomaly_threshold, args.std_dev)
+    analyze_anomalies_report(args.input, args.output)
 
 # Executa o script
 if __name__ == "__main__":
     main()
-
